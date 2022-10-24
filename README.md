@@ -18,7 +18,7 @@ a) На server2 сформировывается конфиг ВПН для но
 
 Реализация:
 1) На сервере server1 развернут апи сервер на основе nginx и Laravel 9 и создано API для автоматизации корпоративной VPN (/var/www/Portal_laravel). Также в будущем этот сервер будет использоваться в качестве портала для управлением параметров API сервера СКУД, просмотра логов и т.д. С помощью библиотеки gss-ntlmssp (поддержка NTLM авторизации и протокола kerberos) сервер подключен в наш домен. Это необходимо для отработки PS скриптов. Установлена библиотека powershell от Microsoft для Linux. Установлена БД Postgres.
-2) На сервере server2 установлен Ubuntu 22.04 и развёрнут Wireguard сервер с порталом управления  h44z /wg-portal. Панель управления: http://csapkitsv0031.fa.evolutionsport.ru:8123. Авторизация в Inventory, вкладка VPN. Менять там параметры только в крайнем случае! Фал конфига с параметрами: /app/wireguard-portal/wg-portal.yml
+2) На сервере server2 установлен Ubuntu 22.04 и развёрнут Wireguard сервер с порталом управления  h44z /wg-portal. Панель управления: http://server2:8123. Авторизация в Inventory, вкладка VPN. Менять там параметры только в крайнем случае! Фал конфига с параметрами: /app/wireguard-portal/wg-portal.yml
 3) В DC прописан dns portal.site.ru lkz для сервера server1.
 4) В AD cозданы группы VPN_INTERNAL_USER и VPN_INTERNAL_ADMIN (необходимо быть в ней для управления в админке wireguard).
 5) В AD пользователь DOMAIN\ldapexternal с помощью GPO Localadmin and Remoteadmin добавлен в локальные админы на рабочих станциях нашей сети (чтобы удалённо добавлять через PS пользаков в локал группу "user remote desktop".
