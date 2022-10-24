@@ -49,6 +49,5 @@ a) На server2 сформировывается конфиг ВПН для но
 
 5) Конфиг API VPN находится тут: /var/www/Portal_laravel/.env
    Основное ПО с описанием: /var/www/Portal_laravel/app/Http/Controllers/Apicontroller.php
-
 6) Если все параметры из пункта 1 указаны верно - на почту пользователя придет конфиг с инструкцией. Проверить можно с помощью https://portal.site.ru/api/ldaprefresh. Копия письма придет на it@site.ru
 
