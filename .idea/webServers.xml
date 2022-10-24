@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="ae0195b6-6446-402e-ba4d-c279ed58e3ba" name="10.82.2.30" url="http://portal.evolutionsport.ru">
+        <fileTransfer rootFolder="/var/www/Portal_laravel" accessType="SFTP" host="10.82.2.30" port="22" sshConfigId="4f437e80-a427-45b9-9eef-665e5fbd7416" sshConfig="root@10.82.2.30:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
