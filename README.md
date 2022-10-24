@@ -1,79 +1,54 @@
-<p align="center"><img src="https://res.cloudinary.com/dtfbvvkyp/image/upload/v1566331377/laravel-logolockup-cmyk-red.svg" width="400"></p>
+Идея следующая:
+1) На линуксе поднимаем 2 сервака:
+- server1 - в будущем возможно будет вебпортал для админов (настройки апи сервера, просмотр логов апи сервера и т.д.). На нем поднимаю также laravel php сервер. На нем поднимаем БД для данных.
+- server2 - это VPN сервер на движке Wireguard (наподобие нашего внешнего VPN сервера).
+2) Для доступа к нашей сети пользователя - в AD нужно добавить в группу VPN_INTERNAL_USER и прописать в каком-то поле профиля (например в поле Web Page) название компа (компов), к которому(ым) пользователь может получить доступ извне.
+3) На server написать php скрипт, который будет отрабатывать каждую минуту (5 минут), проверяя через LDAP список пользователей с группой VPN_INTERNAL_USER.
 
-<p align="center">
-<a href="https://travis-ci.org/laravel/framework"><img src="https://travis-ci.org/laravel/framework.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://poser.pugx.org/laravel/framework/d/total.svg" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://poser.pugx.org/laravel/framework/v/stable.svg" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://poser.pugx.org/laravel/framework/license.svg" alt="License"></a>
-</p>
+При появлении нового пользователя в группе:
+a) На server2 сформировывается конфиг ВПН для нового пользователя.  При успешном выполнении отмечаем в БД.
+б) Скрипт через powershell дает команду на удаленный комп для включения именно этого пользователя в группу удаленных рабочих столов. При успешном выполнении отмечаем в БД.
+в) Узнаем текущий IP компа и разрешаем доступ через firewall (iptables) пользователю только исключительно к его компу на предприятии.  При успешном выполнении отмечаем в БД.
+г) после полной отработки скрипта по почте (email в профиле AD) отправляем пользователю архив с конфигом wireguard, инсталяхой wireguard, RDP файлом и мануалом по настройке у себя дома.  При успешном выполнении отмечаем в БД.
 
-## About Laravel
+В случае неудачи какого либо действия (выключен рабочий комп пользака), записываем в БД и в следующую отработку пытаемся вновь выполнить.
+На компе пользователя через GPO делаем скрипт, который будет отрабатывать после входа пользака в систему. Если пользователь принадлежит группе VPN_INTERNAL_USER - проверяем на изменение IP компа и в случае изменения обновляем его в БД.
+В случае блокировки акка пользователя, либо исключения его из группы VPN_INTERNAL_USER - удаляем все доступы.
+При изменении компа пользователя - удаляем локальную группу на старом компе и устанавливаем на новом.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Реализация:
+1) На сервере server1 развернут апи сервер на основе nginx и Laravel 9 и создано API для автоматизации корпоративной VPN (/var/www/Portal_laravel). Также в будущем этот сервер будет использоваться в качестве портала для управлением параметров API сервера СКУД, просмотра логов и т.д. С помощью библиотеки gss-ntlmssp (поддержка NTLM авторизации и протокола kerberos) сервер подключен в наш домен. Это необходимо для отработки PS скриптов. Установлена библиотека powershell от Microsoft для Linux. Установлена БД Postgres.
+2) На сервере server2 установлен Ubuntu 22.04 и развёрнут Wireguard сервер с порталом управления  h44z /wg-portal. Панель управления: http://csapkitsv0031.fa.evolutionsport.ru:8123. Авторизация в Inventory, вкладка VPN. Менять там параметры только в крайнем случае! Фал конфига с параметрами: /app/wireguard-portal/wg-portal.yml
+3) В DC прописан dns portal.site.ru lkz для сервера server1.
+4) В AD cозданы группы VPN_INTERNAL_USER и VPN_INTERNAL_ADMIN (необходимо быть в ней для управления в админке wireguard).
+5) В AD пользователь DOMAIN\ldapexternal с помощью GPO Localadmin and Remoteadmin добавлен в локальные админы на рабочих станциях нашей сети (чтобы удалённо добавлять через PS пользаков в локал группу "user remote desktop".
+6) Настроен Firewall на server2 с помощью iptables.
+7) Проброшен порт udp 37910 к  server2 для доступа пользователей к корпоративному VPN.
+8) Для VPN сети была выбрана подсеть 10.84.0.0/20. На sw0001 настроена маршрутизация к ней.
+9) Добавлено GPO VPNinternal для проверки изменения IP рабочих мест пользователей при загрузке системы.
+   
+Для администраторов:
+1) Чтобы у пользователя появился доступ к корпоративной VPN необходимо включить его в группу VPN_INTERNAL_USER, в профиле AD обязательно указать его email, в поле Web page прописать название рабочего места к которому будет подключаться пользователь. Можно указать несколько рабочих мест (1 комп в каждой строке).
+2) С помощью CRON на server1 каждую минуту идет запрос к https://portal.site.ru/api/ldaprefresh, которая и обрабатывает изменения параметров в AD. Можно самому вручную в браузере запустить этот адрес. На выходе будет лог обработки.
+3) С помощью GPO VPNinternal при включении рабочих машин отправляется запрос https://portal.site.ru/api/ipchange?comp=$comp для проверки изменения IP рабочего места.
+4) На server2 в файерволе автоматически устанавливаются разрешающие правила для доступа клиента с VPN к своему компу. Пример:
+    -A FORWARD -s 10.84.0.1/32 -d 10.82.132.204/32 -j ACCEPT_TCP_UDP_3389
+    -A ACCEPT_TCP_UDP_3389 -p tcp -m tcp --dport 3389 -j ACCEPT
+    -A ACCEPT_TCP_UDP_3389 -p udp -m udp --dport 3389 -j ACCEPT
+    -A ACCEPT_TCP_UDP_3389 -p icmp -m icmp --icmp-type any -j ACCEPT
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+В случае отключения в AD разрешенных компов, либо группы пользователя - происходит удаление этих правил.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Также в server2 активированы разрешающие правила к 10.0.2.0/30 для DNS, NTLM проверки и проверки kerberos удаленного рабочего места.
 
-## Learning Laravel
+-A FORWARD -s 10.84.0.0/20 -d 10.0.2.0/30 -p udp -m udp --dport 53 -j ACCEPT
+-A FORWARD -s 10.84.0.0/20 -d 10.0.2.0/30 -p tcp -m tcp --dport 88 -j ACCEPT
+-A FORWARD -s 10.84.0.0/20 -d 10.0.2.0/30 -p udp -m udp --dport 88 -j ACCEPT
+-A FORWARD -s 10.84.0.0/20 -d 10.0.2.0/30 -p icmp -m icmp --icmp-type any -j ACCEPT
+-A FORWARD -s 10.84.0.0/20 -d 10.0.2.0/30 -p udp -m udp --dport 389 -j ACCEPT
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+5) Конфиг API VPN находится тут: /var/www/Portal_laravel/.env
+   Основное ПО с описанием: /var/www/Portal_laravel/app/Http/Controllers/Apicontroller.php
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains over 1500 video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+6) Если все параметры из пункта 1 указаны верно - на почту пользователя придет конфиг с инструкцией. Проверить можно с помощью https://portal.site.ru/api/ldaprefresh. Копия письма придет на it@site.ru
 
-## Laravel Sponsors
-
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the Laravel [Patreon page](https://patreon.com/taylorotwell).
-
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Cubet Techno Labs](https://cubettech.com)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[British Software Development](https://www.britishsoftware.co)**
-- **[Webdock, Fast VPS Hosting](https://www.webdock.io/en)**
-- **[DevSquad](https://devsquad.com)**
-- [UserInsights](https://userinsights.com)
-- [Fragrantica](https://www.fragrantica.com)
-- [SOFTonSOFA](https://softonsofa.com/)
-- [User10](https://user10.com)
-- [Soumettre.fr](https://soumettre.fr/)
-- [CodeBrisk](https://codebrisk.com)
-- [1Forge](https://1forge.com)
-- [TECPRESSO](https://tecpresso.co.jp/)
-- [Runtime Converter](http://runtimeconverter.com/)
-- [WebL'Agence](https://weblagence.com/)
-- [Invoice Ninja](https://www.invoiceninja.com)
-- [iMi digital](https://www.imi-digital.de/)
-- [Earthlink](https://www.earthlink.ro/)
-- [Steadfast Collective](https://steadfastcollective.com/)
-- [We Are The Robots Inc.](https://watr.mx/)
-- [Understand.io](https://www.understand.io/)
-- [Abdel Elrafa](https://abdelelrafa.com)
-- [Hyper Host](https://hyper.host)
-- [Appoly](https://www.appoly.co.uk)
-- [OP.GG](https://op.gg)
-- [云软科技](http://www.yunruan.ltd/)
-
-## Contributing
-
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
